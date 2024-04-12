@@ -278,6 +278,135 @@ class Formatter:
 
 ### Proto Handler
 
+class ProtoHandler:
+    Writer    = Writer()
+    Formatter = Formatter()
+
+    def __init__(self, Proto, Upvalues = {}):
+        self.Proto = Proto
+
+        self.VariableCount = 0
+        self.GlobalCount = 0
+        self.UpvalueCount = 0
+
+        self.Stack = {}
+        self.Upvalues = Upvalues
+
+        self.OpcodeHandlers = {"LOADK":self.LOADK, "MOVE":self.MOVE, "GETGLOBAL":self.GETGLOBAL, "UNM":self.UNM, "CALL":self.CALL, "RETURN":self.RETURN}
+
+    def Process(self):
+        for Instruction in self.Proto["Instructions"].values():
+            OpCode = Instruction["OpCode"]
+
+            if OpCode in self.OpcodeHandlers:
+                Text, NewLine = self.OpcodeHandlers[OpCode](Instruction)
+                self.Writer.Append(Text, NewLine)
+            else:
+                Logger.Send(f"Unhandled opcode encountered {OpCode}", 3)
+                #exit()
+
+        print(self.Writer.Output)
+    
+    def GrabFromStack(self, Index):
+        Result = None
+
+        if Index in self.Stack:
+            Result = self.Stack[Index]
+        else:
+            Result = f"var{self.VariableCount}"
+            self.SetStack(Index, Result)
+
+            self.VariableCount += 1
+
+        return Result
+    
+    def SetStack(self, Index, Value):
+        self.Stack[Index] = Value
+
+    def LOADK(self, Instruction):
+        Constant = self.Proto["Constants"][Instruction["Bx"]]
+        FormattedConstant = self.Formatter.FormatConstant(Constant)
+
+        Output = f"local var{self.VariableCount} = {FormattedConstant}"
+
+        self.SetStack(Instruction["A"], f"var{self.VariableCount}")
+
+        self.VariableCount += 1
+
+        return Output, True
+    
+    def GETGLOBAL(self, Instruction):
+        Constant = self.Proto["Constants"][Instruction["Bx"]]
+        FormattedConstant = self.Formatter.FormatConstant(Constant).strip('"')
+
+        Output = f"local global{self.GlobalCount} = {FormattedConstant}"
+
+        self.SetStack(Instruction["A"], f"global{self.GlobalCount}")
+
+        self.GlobalCount += 1
+
+        return Output, True
+    
+    def MOVE(self, Instruction):
+        Output = f"local {self.GrabFromStack(Instruction['A'])} = {self.GrabFromStack(Instruction['B'])}"
+
+        return Output, True
+
+    def CALL(self, Instruction):
+        Output = ""
+
+        CallFrame = [self.GrabFromStack(Instruction["A"])] # Store function name and arguments, before overwriting in stack for returns
+        for Argument in range(1, Instruction["B"]): CallFrame.append(self.GrabFromStack(Instruction["A"] + Argument))
+
+        if Instruction["C"] >= 2:
+            SizeofReturns = Instruction["C"] - 1
+
+            Output += f"local var{self.VariableCount}"
+            self.SetStack(Instruction["A"], f"var{self.VariableCount}")
+            self.VariableCount += 1
+
+            for ReturnCount in range(1, SizeofReturns):
+                Output += f", var{self.VariableCount}"
+                self.SetStack(Instruction["A"] + ReturnCount, f"var{self.VariableCount}")
+                self.VariableCount += 1
+
+            Output += " = "
+        elif Instruction["C"] == 0:
+            pass
+
+        Output += f"{CallFrame[0]}("
+
+        if Instruction["B"] >= 2:
+            CallFrameSize = len(CallFrame)
+
+            for Index, Argument in enumerate(CallFrame):
+                if Index == 0: continue # Skip function name
+
+                Output += f"{Argument}{', ' if Index < CallFrameSize - 1 else ''}"
+        elif Instruction["B"] == 0:
+            pass
+
+        Output += ")"
+
+        return Output, True
+    
+    def UNM(self, Instruction):
+        Output = f"local {self.GrabFromStack(Instruction['A'])} = -{self.GrabFromStack(Instruction['B'])}"
+
+        return Output, True
+
+    def RETURN(self, Instruction):
+        output = "return "
+
+        if Instruction["B"] >= 2:
+            SizeofReturns = Instruction["B"] - 1
+
+            for ReturnCount in range(1, SizeofReturns + 1):
+                output += f"{self.GrabFromStack(Instruction['A'] + ReturnCount)}{', ' if ReturnCount < SizeofReturns else ''}"
+        elif Instruction["B"] == 0:
+            pass
+
+        return output, True
 
 
 ### Main

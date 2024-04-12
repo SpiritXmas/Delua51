@@ -399,7 +399,12 @@ class ProtoHandler:
         return Output, True
     
     def UNM(self, Instruction):
-        Output = f"local {self.GrabFromStack(Instruction['A'])} = -{self.GrabFromStack(Instruction['B'])}"
+        Output = ""
+
+        if not self.ExistInStack(Instruction["A"]):
+            Output += "local "
+
+        Output = f"{self.GrabFromStack(Instruction['A'])} = -{self.GrabFromStack(Instruction['B'])}"
 
         return Output, True
 
@@ -421,7 +426,7 @@ class ProtoHandler:
 
 Logger = Logger(3)
 
-FileName = "Samples/loadmoveTest32.luac"
+FileName = "Samples/unm32.luac"
 File = Reader(FileName)
 
 Data = Parser(File)

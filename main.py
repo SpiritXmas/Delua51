@@ -5,12 +5,13 @@
 ### Reader
 
 class Reader:
-    def __init__(self, FileName):
+    def __init__(self, FileName, Endianness = "little"):
         self.Pointer = 0
         self.File = open(FileName, "rb")
 
-        self.endian = None
         self.SizeT = 4
+        self.IntSize = 4
+        self.Endianness = Endianness
     
     def ReadByte(self):
         self.Pointer += 1
@@ -18,18 +19,22 @@ class Reader:
     
     def ReadByteAsInt(self):
         self.Pointer += 1
-        return int.from_bytes(self.File.read(1), self.endian or "little")
+        return int.from_bytes(self.File.read(1), self.Endianness)
     
     def ReadBytes(self, Amount):
         self.Pointer += Amount
         return self.File.read(Amount)
     
     def ReadInt(self):
-        self.Pointer += 4
-        return int.from_bytes(self.File.read(4), self.endian or "little")
+        self.Pointer += self.IntSize
+        return int.from_bytes(self.File.read(self.IntSize), self.Endianness)
+
+    def ReadSizeT(self):
+        self.Pointer += self.SizeT
+        return int.from_bytes(self.File.read(self.SizeT), self.Endianness)
     
     def ReadString(self):
-        Size = self.ReadInt()
+        Size = self.ReadSizeT()
         String = self.File.read(Size)
         self.Pointer += Size
 
@@ -62,3 +67,66 @@ class Logger: # 0 = None, 1 = Info, 2 = Warning, 3 = Error
         self.LogLevel = LogLevel
 
 
+### Parser
+
+class Parser:
+    def __init__(self, ReaderObject):
+        self.Reader = ReaderObject
+
+    def Parse(self):
+        self.ParseHeader()
+
+    def ParseProto(self):
+        pass
+
+    def ParseHeader(self):
+        self.HeaderSignature = self.Reader.ReadInt()
+        if self.HeaderSignature != 1635077147:
+            # Can be big endian format
+
+            self.Reader.Close()
+
+            self.Reader = Reader(FileName, "big")
+            self.HeaderSignature = self.Reader.ReadInt()
+
+            if self.HeaderSignature != 1635077147:
+                Logger.Send("Invalid Header Signature", 3)
+                exit()
+        
+        self.VersionNumber = self.Reader.ReadByteAsInt()
+        if self.VersionNumber != 0x51:
+            Logger.Send("Invalid Version Number", 3)
+            exit()
+
+        self.Format = self.Reader.ReadByteAsInt()
+        if self.Format != 0:
+            Logger.Send("Unofficial bytecode format", 3)
+            exit()
+        
+        self.Endianness = self.Reader.ReadByteAsInt()
+        if self.Endianness != (self.Reader.Endianness != "big"):
+            Logger.Send("Invalid Endianness", 3)
+            exit()
+        
+        self.IntSize         = self.Reader.ReadByteAsInt()
+        self.Size_TSize      = self.Reader.ReadByteAsInt()
+        self.InstructionSize = self.Reader.ReadByteAsInt()
+        self.LuaNumberSize   = self.Reader.ReadByteAsInt()
+        self.IntegralFlag    = self.Reader.ReadByteAsInt()
+
+        self.Reader.IntSize = self.IntSize
+        self.Reader.SizeT   = self.Size_TSize
+
+
+
+        
+
+### Main
+
+Logger = Logger(3)
+
+FileName = "Samples/helloworld32.luac"
+File = Reader(FileName)
+
+ParsedFile = Parser(File)
+ParsedFile.Parse()

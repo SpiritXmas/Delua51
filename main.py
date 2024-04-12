@@ -214,8 +214,30 @@ class Parser:
         self.Reader.LuaNumberSize = self.LuaNumberSize
 
 
+### Writer
 
-        
+class Writer:
+    def __init__(self):
+        self.Output = ""
+        self.IndentSize = 4
+
+        self.IndentLevel = 0
+    
+    def Append(self, String, NewLine = False):
+        self.Output += String
+
+        if NewLine:
+            self.Output += "\n"
+
+    def Indent(self):
+        self.IndentLevel += 1
+
+    def Unindent(self):
+        self.IndentLevel -= 1
+    
+    def Output(self):
+        return self.Output
+
 
 ### Main
 
@@ -227,4 +249,3 @@ File = Reader(FileName)
 Data = Parser(File)
 Data.Parse()
 
-print(Data.MainProto["Instructions"])

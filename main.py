@@ -295,7 +295,7 @@ class ProtoHandler:
         self.Stack = {}
         self.Upvalues = Upvalues
 
-        self.OpcodeHandlers = {"LOADK":self.LOADK, "MOVE":self.MOVE, "GETGLOBAL":self.GETGLOBAL, "UNM":self.UNM, "CALL":self.CALL, "RETURN":self.RETURN}
+        self.OpcodeHandlers = {"MOVE":self.MOVE, "LOADK":self.LOADK, "LOADBOOL":self.LOADBOOL, "GETGLOBAL":self.GETGLOBAL, "CALL":self.CALL, "UNM":self.UNM, "RETURN":self.RETURN}
 
     def Process(self):
         for Instruction in self.Proto["Instructions"].values():

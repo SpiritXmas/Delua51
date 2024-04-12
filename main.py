@@ -320,6 +320,9 @@ class ProtoHandler:
 
         return Result
     
+    def ExistInStack(self, Index):
+        return Index in self.Stack
+    
     def SetStack(self, Index, Value):
         self.Stack[Index] = Value
 
@@ -348,7 +351,12 @@ class ProtoHandler:
         return Output, True
     
     def MOVE(self, Instruction):
-        Output = f"local {self.GrabFromStack(Instruction['A'])} = {self.GrabFromStack(Instruction['B'])}"
+        Output = ""
+
+        if not self.ExistInStack(Instruction["A"]):
+            Output += "local "
+
+        Output += f"{self.GrabFromStack(Instruction['A'])} = {self.GrabFromStack(Instruction['B'])}"
 
         return Output, True
 
@@ -413,7 +421,7 @@ class ProtoHandler:
 
 Logger = Logger(3)
 
-FileName = "Samples/numberTest32.luac"
+FileName = "Samples/loadmoveTest32.luac"
 File = Reader(FileName)
 
 Data = Parser(File)

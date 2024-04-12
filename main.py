@@ -329,6 +329,16 @@ class ProtoHandler:
     def SetStack(self, Index, Value):
         self.Stack[Index] = Value
 
+    def MOVE(self, Instruction):
+        Output = ""
+
+        if not self.ExistInStack(Instruction["A"]):
+            Output += "local "
+
+        Output += f"{self.GrabFromStack(Instruction['A'])} = {self.GrabFromStack(Instruction['B'])}"
+
+        return Output, True
+
     def LOADK(self, Instruction):
         Constant = self.Proto["Constants"][Instruction["Bx"]]
         FormattedConstant = self.Formatter.FormatConstant(Constant)
@@ -341,6 +351,14 @@ class ProtoHandler:
 
         return Output, True
     
+    def LOADBOOL(self, Instruction):
+        Output = ""
+
+        if not self.ExistInStack(Instruction["A"]):
+            Output += "local "
+        
+        Output += f"{self.GrabFromStack(Instruction['A'])} = {Instruction['B'] == 1 if 'true' else 'false'}"
+
     def GETGLOBAL(self, Instruction):
         Constant = self.Proto["Constants"][Instruction["Bx"]]
         FormattedConstant = self.Formatter.FormatConstant(Constant).strip('"')
@@ -350,16 +368,6 @@ class ProtoHandler:
         self.SetStack(Instruction["A"], f"global{self.GlobalCount}")
 
         self.GlobalCount += 1
-
-        return Output, True
-    
-    def MOVE(self, Instruction):
-        Output = ""
-
-        if not self.ExistInStack(Instruction["A"]):
-            Output += "local "
-
-        Output += f"{self.GrabFromStack(Instruction['A'])} = {self.GrabFromStack(Instruction['B'])}"
 
         return Output, True
 

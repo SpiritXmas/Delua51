@@ -33,11 +33,30 @@ class Reader:
     def ReadSizeT(self):
         self.Pointer += self.SizeT
         return int.from_bytes(self.File.read(self.SizeT), self.Endianness)
-    
+
     def ReadLuaNumber(self):
         self.Pointer += self.LuaNumberSize
-        return int.from_bytes(self.File.read(self.LuaNumberSize), self.Endianness)
+        Bytes = self.File.read(self.LuaNumberSize)
+        
+        IntValue = 0
+        if self.Endianness == "little":
+            for BI in range(self.LuaNumberSize):
+                IntValue |= Bytes[BI] << (BI * 8)
+        else:
+            for BI in range(self.LuaNumberSize):
+                IntValue |= Bytes[BI] << ((self.LuaNumberSize - 1 - BI) * 8)
     
+        NegativeFlag = IntValue >> 63
+        Exponent     = (IntValue >> 52) & 0x7FF
+        Mantissa     = IntValue & ((1 << 52) - 1)
+    
+        if Exponent == 0x7FF:
+            return -float('inf') if NegativeFlag else float('inf')
+        elif Exponent == 0:
+            return (-1) ** NegativeFlag * 2 ** (-1022) * (Mantissa / (1 << 52))
+        else:
+            return (-1) ** NegativeFlag * 2 ** (Exponent - 1023) * (1 + Mantissa / (1 << 52))
+
     def ReadString(self):
         Size = self.ReadSizeT()
         String = self.File.read(Size)
@@ -257,80 +276,7 @@ class Formatter:
             exit()
 
 
-### Opcode Handlers
-
-Writer = Writer()
-Formatter = Formatter()
-
-VariableCount = 0
-GlobalCount = 0
-UpvalueCount = 0
-
-Stack = {}
-
-def Handle_LOADK(Instruction):
-    global VariableCount
-
-    Return = "local var" + str(VariableCount) + " = " + Formatter.FormatConstant(Instruction["Proto"]["Constants"][Instruction["Bx"]])
-    Stack[Instruction["A"]] = "var" + str(VariableCount)
-    
-    VariableCount += 1
-
-    return Return, True
-
-def Handle_GETGLOBAL(Instruction):
-    global GlobalCount
-
-    Return = "local global" + str(GlobalCount) + " = " + Formatter.FormatConstant(Instruction["Proto"]["Constants"][Instruction["Bx"]]).strip("\"")
-    Stack[Instruction["A"]] = "global" + str(GlobalCount)
-    
-    GlobalCount += 1
-
-    return Return, True
-
-def Handle_CALL(Instruction):
-    global VariableCount
-
-    Return = ""
-
-    OldFunctionLocation = Instruction["A"]
-
-    if Instruction["C"] >= 2:
-        AmountOfResults = Instruction["C"] - 1
-
-        Return += "local var" + str(VariableCount) + (", " if AmountOfResults > 1 else " = ")
-        Stack[Instruction["A"]] = "var" + str(VariableCount)
-        VariableCount += 1
-
-        for ResultCount in range(1, AmountOfResults):
-            Return += "var" + str(VariableCount) + (", " if ResultCount < AmountOfResults - 1 else " = ")
-            Stack[Instruction["A"] + ResultCount] = "var" + str(VariableCount)
-            VariableCount += 1
-    
-    Return += Stack[OldFunctionLocation] + "("
-    if Instruction["B"] >= 2:
-        AmountOfArguments = Instruction["B"] - 1
-
-        for ArgumentCount in range(1, AmountOfArguments + 1):
-            Return += Stack[Instruction["A"] + ArgumentCount] + (", " if ArgumentCount < AmountOfArguments else "")
-        
-    Return += ")"
-
-    return Return, True
-
-def Handle_RETURN(Instruction):
-    Return = "return "
-
-    if Instruction["B"] >= 2:
-        AmountOfReturns = Instruction["B"] - 1
-
-        for ReturnCount in range(1, AmountOfReturns + 1):
-            Return += Stack[Instruction["A"] + ReturnCount] + (", " if ReturnCount < AmountOfReturns else "")
-    
-    return Return, True
-
-
-OpcodeHandlers = {"LOADK":Handle_LOADK, "GETGLOBAL":Handle_GETGLOBAL, "CALL":Handle_CALL, "RETURN":Handle_RETURN}
+### Proto Handler
 
 
 
@@ -338,26 +284,11 @@ OpcodeHandlers = {"LOADK":Handle_LOADK, "GETGLOBAL":Handle_GETGLOBAL, "CALL":Han
 
 Logger = Logger(3)
 
-FileName = "Samples/helloworld32.luac"
+FileName = "Samples/numberTest32.luac"
 File = Reader(FileName)
 
 Data = Parser(File)
 Data.Parse()
 
-def HandleProto(Proto):
-    for Instruction in Proto["Instructions"].values():
-        OpCode = Instruction["OpCode"]
-
-        if OpCode in OpcodeHandlers:
-            Text, NewLine = OpcodeHandlers[OpCode](Instruction)
-            Writer.Append(Text, NewLine)
-        else:
-            Logger.Send("Invalid OpCode", 3)
-            exit()
-
-    for SubProto in Proto["Protos"].values():
-        HandleProto(SubProto)
-
-    print(Writer.Output)
-
-HandleProto(Data.MainProto)
+ProtoHandler = ProtoHandler(Data.MainProto)
+ProtoHandler.Process()

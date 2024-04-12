@@ -89,7 +89,7 @@ class Parser:
         self.ParseHeader()
         self.MainProto = self.ParseProto()
 
-    def ParseInstruction(self, Instruction):
+    def ParseInstruction(self, Instruction, Proto):
         ParsedInstruction = {}
 
         OpCode = Instruction & 0x3F
@@ -112,6 +112,8 @@ class Parser:
             ParsedInstruction["A"] = ((Instruction >> 6) & 0xFF)
             ParsedInstruction["sBx"] = ((Instruction >> 14) & 0x3FFFF) - 131071
 
+        ParsedInstruction["Proto"] = Proto
+
         return ParsedInstruction
 
     def ParseProto(self):
@@ -131,7 +133,7 @@ class Parser:
 
         CodeSize = self.Reader.ReadInt()
         for IP in range(1, CodeSize + 1):
-            Proto["Instructions"][IP] = self.ParseInstruction(self.Reader.ReadInt())
+            Proto["Instructions"][IP] = self.ParseInstruction(self.Reader.ReadInt(), Proto)
         
         ConstantSize = self.Reader.ReadInt()
         for CI in range(0, ConstantSize):
@@ -224,19 +226,112 @@ class Writer:
         self.IndentLevel = 0
     
     def Append(self, String, NewLine = False):
-        self.Output += String
-
-        if NewLine:
-            self.Output += "\n"
+        self.Output += " " * (self.IndentSize * self.IndentLevel) + String + ("\n" if NewLine else "")
 
     def Indent(self):
         self.IndentLevel += 1
 
     def Unindent(self):
         self.IndentLevel -= 1
+
+
+### Formatter
+
+class Formatter:
+    def __init__(self):
+        pass
+
+    def FormatConstant(self, Constant):
+        ConstantType = Constant[0]
+
+        if ConstantType == 0:
+            return "nil"
+        elif ConstantType == 1:
+            return str(Constant[1])
+        elif ConstantType == 3:
+            return str(Constant[1])
+        elif ConstantType == 4:
+            return "\"" + Constant[1] + "\""
+        else:
+            Logger.Send("Invalid Constant Type", 3)
+            exit()
+
+
+### Opcode Handlers
+
+Writer = Writer()
+Formatter = Formatter()
+
+VariableCount = 0
+GlobalCount = 0
+UpvalueCount = 0
+
+Stack = {}
+
+def Handle_LOADK(Instruction):
+    global VariableCount
+
+    Return = "local var" + str(VariableCount) + " = " + Formatter.FormatConstant(Instruction["Proto"]["Constants"][Instruction["Bx"]])
+    Stack[Instruction["A"]] = "var" + str(VariableCount)
     
-    def Output(self):
-        return self.Output
+    VariableCount += 1
+
+    return Return, True
+
+def Handle_GETGLOBAL(Instruction):
+    global GlobalCount
+
+    Return = "local global" + str(GlobalCount) + " = " + Formatter.FormatConstant(Instruction["Proto"]["Constants"][Instruction["Bx"]]).strip("\"")
+    Stack[Instruction["A"]] = "global" + str(GlobalCount)
+    
+    GlobalCount += 1
+
+    return Return, True
+
+def Handle_CALL(Instruction):
+    global VariableCount
+
+    Return = ""
+
+    OldFunctionLocation = Instruction["A"]
+
+    if Instruction["C"] >= 2:
+        AmountOfResults = Instruction["C"] - 1
+
+        Return += "local var" + str(VariableCount) + (", " if AmountOfResults > 1 else " = ")
+        Stack[Instruction["A"]] = "var" + str(VariableCount)
+        VariableCount += 1
+
+        for ResultCount in range(1, AmountOfResults):
+            Return += "var" + str(VariableCount) + (", " if ResultCount < AmountOfResults - 1 else " = ")
+            Stack[Instruction["A"] + ResultCount] = "var" + str(VariableCount)
+            VariableCount += 1
+    
+    Return += Stack[OldFunctionLocation] + "("
+    if Instruction["B"] >= 2:
+        AmountOfArguments = Instruction["B"] - 1
+
+        for ArgumentCount in range(1, AmountOfArguments + 1):
+            Return += Stack[Instruction["A"] + ArgumentCount] + (", " if ArgumentCount < AmountOfArguments else "")
+        
+    Return += ")"
+
+    return Return, True
+
+def Handle_RETURN(Instruction):
+    Return = "return "
+
+    if Instruction["B"] >= 2:
+        AmountOfReturns = Instruction["B"] - 1
+
+        for ReturnCount in range(1, AmountOfReturns + 1):
+            Return += Stack[Instruction["A"] + ReturnCount] + (", " if ReturnCount < AmountOfReturns else "")
+    
+    return Return, True
+
+
+OpcodeHandlers = {"LOADK":Handle_LOADK, "GETGLOBAL":Handle_GETGLOBAL, "CALL":Handle_CALL, "RETURN":Handle_RETURN}
+
 
 
 ### Main
@@ -249,3 +344,20 @@ File = Reader(FileName)
 Data = Parser(File)
 Data.Parse()
 
+def HandleProto(Proto):
+    for Instruction in Proto["Instructions"].values():
+        OpCode = Instruction["OpCode"]
+
+        if OpCode in OpcodeHandlers:
+            Text, NewLine = OpcodeHandlers[OpCode](Instruction)
+            Writer.Append(Text, NewLine)
+        else:
+            Logger.Send("Invalid OpCode", 3)
+            exit()
+
+    for SubProto in Proto["Protos"].values():
+        HandleProto(SubProto)
+
+    print(Writer.Output)
+
+HandleProto(Data.MainProto)

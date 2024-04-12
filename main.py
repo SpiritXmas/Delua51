@@ -239,19 +239,22 @@ class Parser:
 
 class Writer:
     def __init__(self):
-        self.Output = ""
+        self.Output = []
         self.IndentSize = 4
 
         self.IndentLevel = 0
     
     def Append(self, String, NewLine = False):
-        self.Output += " " * (self.IndentSize * self.IndentLevel) + String + ("\n" if NewLine else "")
+        self.Output.append(" " * (self.IndentSize * self.IndentLevel) + String + ("\n" if NewLine else ""))
 
     def Indent(self):
         self.IndentLevel += 1
 
     def Unindent(self):
         self.IndentLevel -= 1
+
+    def Tostring(self):
+        return "".join(self.Output)
 
 
 ### Formatter
@@ -303,9 +306,9 @@ class ProtoHandler:
                 self.Writer.Append(Text, NewLine)
             else:
                 Logger.Send(f"Unhandled opcode encountered {OpCode}", 3)
-                #exit()
+                exit()
 
-        print(self.Writer.Output)
+        print(self.Writer.Tostring())
     
     def GrabFromStack(self, Index):
         Result = None
@@ -426,7 +429,7 @@ class ProtoHandler:
 
 Logger = Logger(3)
 
-FileName = "Samples/unm32.luac"
+FileName = "Samples/multipleArgs32.luac"
 File = Reader(FileName)
 
 Data = Parser(File)

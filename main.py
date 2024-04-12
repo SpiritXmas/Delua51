@@ -1,4 +1,4 @@
-## Delua 5.1 - A Lua 5.1 decompiler, aimed towards compiled lua files with stripped debug information.
+## Delua51 - A Lua 5.1 decompiler, aimed towards compiled lua files with stripped debug information.
 
 
 
@@ -72,6 +72,13 @@ class Logger: # 0 = None, 1 = Info, 2 = Warning, 3 = Error
         self.LogLevel = LogLevel
 
 
+### Mappings
+
+OpCodes = {0:"MOVE", 1:"LOADK", 2:"LOADBOOL", 3:"LOADNIL", 4:"GETUPVAL", 5:"GETGLOBAL", 6:"GETTABLE", 7:"SETGLOBAL", 8:"SETUPVAL", 9:"SETTABLE", 10:"NEWTABLE", 11:"SELF", 12:"ADD", 13:"SUB", 14:"MUL", 15:"DIV", 16:"MOD", 17:"POW", 18:"UNM", 19:"NOT", 20:"LEN", 21:"CONCAT", 22:"JMP", 23:"EQ", 24:"LT", 25:"LE", 26:"TEST", 27:"TESTSET", 28:"CALL", 29:"TAILCALL", 30:"RETURN", 31:"FORLOOP", 32:"FORPREP", 33:"TFORLOOP", 34:"SETLIST", 35:"CLOSE", 36:"CLOSURE", 37:"VARARG"}
+
+OpModes = {"MOVE":"ABC", "LOADK":"ABx", "LOADBOOL":"ABC", "LOADNIL":"ABC", "GETUPVAL":"ABC", "GETGLOBAL":"ABx", "GETTABLE":"ABC", "SETGLOBAL":"ABx", "SETUPVAL":"ABC", "SETTABLE":"ABC", "NEWTABLE":"ABC", "SELF":"ABC", "ADD":"ABC", "SUB":"ABC", "MUL":"ABC", "DIV":"ABC", "MOD":"ABC", "POW":"ABC", "UNM":"ABC", "NOT":"ABC", "LEN":"ABC", "CONCAT":"ABC", "JMP":"sBx", "EQ":"ABC", "LT":"ABC", "LE":"ABC", "TEST":"ABC", "TESTSET":"ABC", "CALL":"ABC", "TAILCALL":"ABC", "RETURN":"ABC", "FORLOOP":"sBx", "FORPREP":"sBx", "TFORLOOP":"ABC", "SETLIST":"ABC", "CLOSE":"ABC", "CLOSURE":"ABx", "VARARG":"ABC"}
+
+
 ### Parser
 
 class Parser:
@@ -81,6 +88,31 @@ class Parser:
     def Parse(self):
         self.ParseHeader()
         self.MainProto = self.ParseProto()
+
+    def ParseInstruction(self, Instruction):
+        ParsedInstruction = {}
+
+        OpCode = Instruction & 0x3F
+        if OpCode < 0 or OpCode > 37:
+            Logger.Send("Invalid OpCode", 3)
+            exit()
+
+        ParsedInstruction["OpCode"] = OpCodes[OpCode]
+
+        OpMode = OpModes[ParsedInstruction["OpCode"]]
+
+        if OpMode == "ABC":
+            ParsedInstruction["A"] = ((Instruction >> 6) & 0xFF)
+            ParsedInstruction["B"] = ((Instruction >> 23) & 0x1FF)
+            ParsedInstruction["C"] = ((Instruction >> 14) & 0x1FF)
+        elif OpMode == "ABx":
+            ParsedInstruction["A"] = ((Instruction >> 6) & 0xFF)
+            ParsedInstruction["Bx"] = ((Instruction >> 14) & 0x3FFFF)
+        elif OpMode == "sBx":
+            ParsedInstruction["A"] = ((Instruction >> 6) & 0xFF)
+            ParsedInstruction["sBx"] = ((Instruction >> 14) & 0x3FFFF) - 131071
+
+        return ParsedInstruction
 
     def ParseProto(self):
         Proto = {
@@ -99,7 +131,7 @@ class Parser:
 
         CodeSize = self.Reader.ReadInt()
         for IP in range(1, CodeSize + 1):
-            Proto["Instructions"][IP] = self.Reader.ReadInt()
+            Proto["Instructions"][IP] = self.ParseInstruction(self.Reader.ReadInt())
         
         ConstantSize = self.Reader.ReadInt()
         for CI in range(0, ConstantSize):
@@ -195,3 +227,4 @@ File = Reader(FileName)
 Data = Parser(File)
 Data.Parse()
 
+print(Data.MainProto["Instructions"])

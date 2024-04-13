@@ -292,13 +292,18 @@ class ProtoHandler:
         self.GlobalCount = 0
         self.UpvalueCount = 0
 
+        self.InstructionPointer = 1
+
         self.Stack = {}
         self.Upvalues = Upvalues
 
         self.OpcodeHandlers = {"MOVE":self.MOVE, "LOADK":self.LOADK, "LOADBOOL":self.LOADBOOL, "GETGLOBAL":self.GETGLOBAL, "CALL":self.CALL, "UNM":self.UNM, "RETURN":self.RETURN}
 
     def Process(self):
-        for Instruction in self.Proto["Instructions"].values():
+        CodeSize = len(self.Proto["Instructions"])
+
+        while self.InstructionPointer <= CodeSize:
+            Instruction = self.Proto["Instructions"][self.InstructionPointer]
             OpCode = Instruction["OpCode"]
 
             if OpCode in self.OpcodeHandlers:
@@ -307,6 +312,8 @@ class ProtoHandler:
             else:
                 Logger.Send(f"Unhandled opcode encountered {OpCode}", 3)
                 exit()
+            
+            self.InstructionPointer += 1
 
         print(self.Writer.Tostring())
     

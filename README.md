@@ -1,7 +1,7 @@
 
 # Delua51
 
-Delua51 is a work in progress Lua 5.1 decompiler aimed towards compiled lua files with stripped debug information.
+Delua51 is a work in progress Lua 5.1 decompiler aimed towards compiled lua files with stripped debug information. Pull requests are welcome, anyone can contribute!
 
 
 

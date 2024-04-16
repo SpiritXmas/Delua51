@@ -297,7 +297,16 @@ class ProtoHandler:
         self.Stack = {}
         self.Upvalues = Upvalues
 
-        self.OpcodeHandlers = {"MOVE":self.MOVE, "LOADK":self.LOADK, "LOADBOOL":self.LOADBOOL, "GETGLOBAL":self.GETGLOBAL, "CALL":self.CALL, "UNM":self.UNM, "RETURN":self.RETURN}
+        self.OpcodeHandlers = {
+            "MOVE":self.MOVE, 
+            "LOADK":self.LOADK, 
+            "LOADBOOL":self.LOADBOOL,
+            "LOADNIL":self.LOADNIL,
+            "GETGLOBAL":self.GETGLOBAL, 
+            "CALL":self.CALL, 
+            "UNM":self.UNM, 
+            "RETURN":self.RETURN
+        }
 
     def Process(self):
         CodeSize = len(self.Proto["Instructions"])
@@ -365,6 +374,21 @@ class ProtoHandler:
             Output += "local "
         
         Output += f"{self.GrabFromStack(Instruction['A'])} = {Instruction['B'] == 1 if 'true' else 'false'}"
+
+        return Output, True
+
+    def LOADNIL(self, Instruction):
+        AmountOfNils = Instruction["B"] - Instruction["A"] + 1
+
+        Output = ""
+
+        for NilCount in range(0, AmountOfNils):
+            if not self.ExistInStack(Instruction["A"] + NilCount):
+                Output += "local "
+
+            Output += f"{self.GrabFromStack(Instruction['A'] + NilCount)} = nil\n"
+        
+        return Output, False
 
     def GETGLOBAL(self, Instruction):
         Constant = self.Proto["Constants"][Instruction["Bx"]]
@@ -444,7 +468,7 @@ class ProtoHandler:
 
 Logger = Logger(3)
 
-FileName = "Samples/multipleArgs32.luac"
+FileName = "Samples/loadnil32.luac"
 File = Reader(FileName)
 
 Data = Parser(File)

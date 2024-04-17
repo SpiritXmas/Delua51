@@ -310,6 +310,7 @@ class ProtoHandler:
             "GETUPVAL":self.GETUPVAL,
             "GETGLOBAL":self.GETGLOBAL,
             "GETTABLE":self.GETTABLE,
+            "SETGLOBAL":self.SETGLOBAL,
             "CALL":self.CALL, 
             "UNM":self.UNM, 
             "RETURN":self.RETURN
@@ -467,6 +468,13 @@ class ProtoHandler:
 
         return Output, True
 
+    def SETGLOBAL(self, Instruction):
+        Constant = self.Proto["Constants"][Instruction["Bx"]]
+        FormattedConstant = self.Formatter.FormatConstant(Constant).strip('"') # Strip quotes due to global
+
+        Output = f"{FormattedConstant} = {self.GrabFromStack(Instruction['A'])}"
+
+        return Output, True
 
     def CALL(self, Instruction):
         Output = ""
@@ -534,11 +542,11 @@ class ProtoHandler:
 
 Logger = Logger(3)
 
-FileName = "Samples/gettable32.luac"
+FileName = "Samples/settable32.luac"
 File = Reader(FileName)
 
 Data = Parser(File)
 Data.Parse()
 
 ProtoHandler = ProtoHandler(Data.MainProto)
-print(ProtoHandler.Disassemble())
+print(ProtoHandler.Decompile())

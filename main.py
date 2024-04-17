@@ -302,6 +302,7 @@ class ProtoHandler:
             "LOADK":self.LOADK, 
             "LOADBOOL":self.LOADBOOL,
             "LOADNIL":self.LOADNIL,
+            "GETUPVAL":self.GETUPVAL,
             "GETGLOBAL":self.GETGLOBAL, 
             "CALL":self.CALL, 
             "UNM":self.UNM, 

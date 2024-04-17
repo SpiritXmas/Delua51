@@ -390,6 +390,15 @@ class ProtoHandler:
         
         return Output, False
 
+    def GETUPVAL(self, Instruction):
+        Output = f"local upval{self.UpvalueCount} = {self.Upvalues[Instruction['B']]}" # Revise Upvalue access, when implementing closures
+
+        self.SetStack(Instruction["A"], f"upval{self.UpvalueCount}")
+
+        self.UpvalueCount += 1
+
+        return Output, True
+
     def GETGLOBAL(self, Instruction):
         Constant = self.Proto["Constants"][Instruction["Bx"]]
         FormattedConstant = self.Formatter.FormatConstant(Constant).strip('"')

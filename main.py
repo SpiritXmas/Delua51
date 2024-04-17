@@ -111,14 +111,14 @@ class Parser:
     def ParseInstruction(self, Instruction, Proto):
         ParsedInstruction = {}
 
-        OpCode = Instruction & 0x3F
-        if OpCode < 0 or OpCode > 37:
-            Logger.Send("Invalid OpCode", 3)
+        Opcode = Instruction & 0x3F
+        if Opcode < 0 or Opcode > 37:
+            Logger.Send("Invalid Opcode", 3)
             exit()
 
-        ParsedInstruction["OpCode"] = OpCodes[OpCode]
+        ParsedInstruction["Opcode"] = OpCodes[Opcode]
 
-        OpMode = OpModes[ParsedInstruction["OpCode"]]
+        OpMode = OpModes[ParsedInstruction["Opcode"]]
 
         if OpMode == "ABC":
             ParsedInstruction["A"] = ((Instruction >> 6) & 0xFF)
@@ -240,15 +240,15 @@ class Parser:
 class Writer:
     def __init__(self):
         self.Output = []
-        self.IndentSize = 4
 
+        self.IndentSize = 4
         self.IndentLevel = 0
     
     def Append(self, String, NewLine = False):
         self.Output.append(" " * (self.IndentSize * self.IndentLevel) + String + ("\n" if NewLine else ""))
 
-    def Indent(self):
-        self.IndentLevel += 1
+    def Indent(self, Amount = 1):
+        self.IndentLevel += Amount
 
     def Unindent(self):
         self.IndentLevel -= 1
@@ -282,15 +282,20 @@ class Formatter:
 ### Proto Handler
 
 class ProtoHandler:
-    Writer    = Writer()
+    AsmWriter    = Writer()
+    DecompWriter = Writer()
+
     Formatter = Formatter()
 
-    def __init__(self, Proto, Upvalues = {}):
+    def __init__(self, Proto, Upvalues = {}, Depth = 0, ProtoIndex = 0):
         self.Proto = Proto
 
         self.VariableCount = 0
         self.GlobalCount = 0
         self.UpvalueCount = 0
+
+        self.Depth      = Depth
+        self.ProtoIndex = ProtoIndex
 
         self.InstructionPointer = 1
 
@@ -303,29 +308,61 @@ class ProtoHandler:
             "LOADBOOL":self.LOADBOOL,
             "LOADNIL":self.LOADNIL,
             "GETUPVAL":self.GETUPVAL,
-            "GETGLOBAL":self.GETGLOBAL, 
+            "GETGLOBAL":self.GETGLOBAL,
+            "GETTABLE":self.GETTABLE,
             "CALL":self.CALL, 
             "UNM":self.UNM, 
             "RETURN":self.RETURN
         }
 
-    def Process(self):
+    def Decompile(self):
+        self.DecompWriter.Indent(self.Depth)
+
         CodeSize = len(self.Proto["Instructions"])
 
         while self.InstructionPointer <= CodeSize:
             Instruction = self.Proto["Instructions"][self.InstructionPointer]
-            OpCode = Instruction["OpCode"]
+            Opcode = Instruction["Opcode"]
 
-            if OpCode in self.OpcodeHandlers:
-                Text, NewLine = self.OpcodeHandlers[OpCode](Instruction)
-                self.Writer.Append(Text, NewLine)
+            if Opcode in self.OpcodeHandlers:
+                Text, NewLine = self.OpcodeHandlers[Opcode](Instruction)
+                self.DecompWriter.Append(Text, NewLine)
             else:
-                Logger.Send(f"Unhandled opcode encountered {OpCode}", 3)
+                Logger.Send(f"Unhandled opcode encountered {Opcode}", 3)
                 exit()
             
             self.InstructionPointer += 1
 
-        print(self.Writer.Tostring())
+        return self.DecompWriter.Tostring()
+
+    def Disassemble(self):
+        self.AsmWriter.Indent(self.Depth)
+
+        self.AsmWriter.Append(f"Proto{self.Depth}_{self.ProtoIndex}:", True)
+
+        for IP, Instruction in self.Proto["Instructions"].items():
+            Opcode = Instruction["Opcode"]
+            
+            Line = f"{IP:10}: {Opcode:10}"
+            
+            if "A" in Instruction:
+                Line += f" A : {Instruction['A']:<10}"
+            
+            if "B" in Instruction:
+                Line += f" B : {Instruction['B']:<10}"
+                
+            if "C" in Instruction:
+                Line += f" C : {Instruction['C']:<10}"
+                
+            if "Bx" in Instruction:
+                Line += f" Bx : {Instruction['Bx']:<10}"
+                
+            if "sBx" in Instruction:
+                Line += f" sBx : {Instruction['sBx']:<10}"
+
+            self.AsmWriter.Append(Line, True)
+        
+        return self.AsmWriter.Tostring()
     
     def GrabFromStack(self, Index):
         Result = None
@@ -412,6 +449,25 @@ class ProtoHandler:
 
         return Output, True
 
+    def GETTABLE(self, Instruction):
+        Output = ""
+
+        if not self.ExistInStack(Instruction["A"]):
+            Output += "local "
+
+        Output += f"{self.GrabFromStack(Instruction['A'])} = {self.GrabFromStack(Instruction['B'])}["
+
+        if Instruction["C"] >= 256:
+            Constant = self.Proto["Constants"][Instruction["C"] - 256]
+            FormattedConstant = self.Formatter.FormatConstant(Constant)
+
+            Output += f"{FormattedConstant}]"
+        else:
+            Output += f"{self.GrabFromStack(Instruction['C'])}]"
+
+        return Output, True
+
+
     def CALL(self, Instruction):
         Output = ""
 
@@ -478,11 +534,11 @@ class ProtoHandler:
 
 Logger = Logger(3)
 
-FileName = "Samples/loadnil32.luac"
+FileName = "Samples/gettable32.luac"
 File = Reader(FileName)
 
 Data = Parser(File)
 Data.Parse()
 
 ProtoHandler = ProtoHandler(Data.MainProto)
-ProtoHandler.Process()
+print(ProtoHandler.Disassemble())

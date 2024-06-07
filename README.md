@@ -15,6 +15,7 @@ Delua51 is a work in progress Lua 5.1 decompiler aimed towards compiled lua file
 
 
 ## Todo list
+- Implement basic blocks for cflow
 - Finish implementing OP_CALL     (if c == 0) & (if b == 0)
 - Finish implementing OP_RETURN   (if b == 0)
 - Finish implementing OP_LOADBOOL (if c == 1)
